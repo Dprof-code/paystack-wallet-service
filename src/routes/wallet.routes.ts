@@ -65,6 +65,7 @@ router.post(
         const transaction = new Transaction({
           reference: paystackResponse.reference,
           amount,
+          type: "deposit",
           status: "pending",
           paystackAuthorizationUrl: paystackResponse.authorization_url,
           userId: userId,
@@ -144,7 +145,7 @@ router.post("/paystack/webhook", async (req: Request, res: Response) => {
         const wallet = await Wallet.findOne({ userId });
 
         if (wallet) {
-          wallet.balance = wallet.balance + amount / 100;
+          wallet.balance = wallet.balance + amount;
           await wallet.save();
         }
         transaction.status = status === "success" ? "success" : "failed";
@@ -278,7 +279,7 @@ router.get(
  * Wallet transfer
  */
 router.post(
-  "/balance",
+  "/transfer",
   authenticate,
   async (req: AuthRequest, res: Response) => {
     try {
@@ -292,13 +293,77 @@ router.post(
           const recipientWallet = await Wallet.findOne({
             walletNumber: wallet_number,
           });
+
+          if (recipientWallet) {
+            recipientWallet.balance = recipientWallet.balance + amount;
+            await recipientWallet.save();
+
+            hasWallet.balance = hasWallet.balance - amount;
+            await hasWallet.save();
+
+            const transaction = new Transaction({
+              reference: paystackService.generateReference(),
+              amount,
+              type: "transfer",
+              status: "success",
+              paystackAuthorizationUrl: null,
+              senderId: userId,
+              receiverId: recipientWallet.userId,
+            });
+
+            await transaction.save();
+
+            return res.status(200).json({
+              status: "success",
+              message: "Transfer completed",
+            });
+          } else {
+            return res.status(200).json({
+              status: "failed",
+              message: "Wallet Number not found",
+            });
+          }
+        } else {
+          return res.status(200).json({
+            status: "failed",
+            message: "Insufficient Balance",
+          });
         }
-        return res.status(200).json({
-          balance: hasWallet.balance,
-        });
       }
     } catch (error) {
-      console.error("Unexpected error in getting user balance:", error);
+      console.error("Unexpected error in making transfer:", error);
+      return res.status(500).json({
+        error: "internal_error",
+        message: "An unexpected error occurred",
+      });
+    }
+  }
+);
+
+/**
+ * GET /wallet/transactions
+ */
+router.get(
+  "/transactions",
+  authenticate,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+
+      // Find all transactions where user is involved (deposits, sent, or received)
+      const transactions = await Transaction.find({
+        $or: [{ userId: userId }, { senderId: userId }, { receiverId: userId }],
+      }).sort({ createdAt: -1 });
+
+      return res.status(200).json({
+        transactions: transactions.map((tx) => ({
+          type: tx.type,
+          amount: tx.amount,
+          status: tx.status,
+        })),
+      });
+    } catch (error) {
+      console.error("Unexpected error in getting transaction history:", error);
       return res.status(500).json({
         error: "internal_error",
         message: "An unexpected error occurred",

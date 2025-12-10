@@ -3,7 +3,7 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface IWallet extends Document {
   walletNumber: string;
   balance: number;
-  userId: mongoose.Types.ObjectId;
+  userId: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,7 +23,7 @@ const walletSchema = new Schema<IWallet>(
       default: 0,
     },
     userId: {
-      type: Schema.Types.ObjectId,
+      type: String,
       ref: "User",
       required: true,
       unique: true,

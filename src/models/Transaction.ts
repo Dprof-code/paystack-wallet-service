@@ -1,13 +1,17 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export type TransactionStatus = "pending" | "success" | "failed";
+export type TransactionType = "deposit" | "transfer";
 
 export interface ITransaction extends Document {
   reference: string;
   amount: number;
+  type: TransactionType;
   status: TransactionStatus;
   paystackAuthorizationUrl?: string;
   userId?: string;
+  senderId?: string;
+  receiverId?: string;
   paidAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -26,6 +30,11 @@ const transactionSchema = new Schema<ITransaction>(
       required: true,
       min: 0,
     },
+    type: {
+      type: String,
+      enum: ["deposit", "transfer"],
+      required: true,
+    },
     status: {
       type: String,
       enum: ["pending", "success", "failed"],
@@ -36,6 +45,12 @@ const transactionSchema = new Schema<ITransaction>(
       type: String,
     },
     userId: {
+      type: String,
+    },
+    senderId: {
+      type: String,
+    },
+    receiverId: {
       type: String,
     },
     paidAt: {
