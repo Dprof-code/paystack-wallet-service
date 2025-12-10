@@ -546,17 +546,19 @@ router.post(
 
       const userId = req.user!.id;
 
-      const hasWallet = await Wallet.findOne({ userId: userId });
+      const senderWallet = await Wallet.findOne({ userId: userId });
+      const hasWallet = await Wallet.findOne({ walletNumber: wallet_number });
 
-      if (hasWallet) {
-        if (hasWallet.userId == userId) {
+      if (hasWallet && senderWallet) {
+        if (hasWallet.userId === userId) {
+          console.log(hasWallet.userId, userId);
           return res.status(200).json({
             status: "failed",
             message: "You cannot transfer to yourself",
           });
         }
 
-        if (hasWallet.balance >= amount) {
+        if (senderWallet.balance >= amount) {
           const recipientWallet = await Wallet.findOne({
             walletNumber: wallet_number,
           });
@@ -565,8 +567,8 @@ router.post(
             recipientWallet.balance = recipientWallet.balance + amount;
             await recipientWallet.save();
 
-            hasWallet.balance = hasWallet.balance - amount;
-            await hasWallet.save();
+            senderWallet.balance = senderWallet.balance - amount;
+            await senderWallet.save();
 
             const transaction = new Transaction({
               reference: paystackService.generateReference(),
