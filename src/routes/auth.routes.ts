@@ -8,8 +8,38 @@ import config from "../config";
 const router = Router();
 
 /**
- * GET /auth/google
- * Trigger Google sign-in flow
+ * @swagger
+ * /auth/google:
+ *   get:
+ *     summary: Initiate Google OAuth sign-in
+ *     description: Redirects user to Google sign-in page or returns authorization URL as JSON
+ *     tags: [Authentication]
+ *     parameters:
+ *       - in: query
+ *         name: json
+ *         schema:
+ *           type: string
+ *           enum: [true, false]
+ *         description: Set to 'true' to return JSON instead of redirect
+ *     responses:
+ *       200:
+ *         description: Google authorization URL
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 google_auth_url:
+ *                   type: string
+ *                   example: https://accounts.google.com/o/oauth2/v2/auth?...
+ *       302:
+ *         description: Redirect to Google sign-in page
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get("/google", (req: Request, res: Response) => {
   try {
@@ -36,8 +66,49 @@ router.get("/google", (req: Request, res: Response) => {
 });
 
 /**
- * GET /auth/google/callback
- * Google OAuth callback
+ * @swagger
+ * /auth/google/callback:
+ *   get:
+ *     summary: Google OAuth callback
+ *     description: Handles Google OAuth callback, creates/updates user, and returns JWT token
+ *     tags: [Authentication]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Authorization code from Google
+ *       - in: query
+ *         name: error
+ *         schema:
+ *           type: string
+ *         description: Error code if user denied access
+ *     responses:
+ *       200:
+ *         description: Successfully authenticated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Bad request or user denied access
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Invalid or expired authorization code
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get("/google/callback", async (req: Request, res: Response) => {
   try {

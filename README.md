@@ -1,16 +1,79 @@
-# Google Sign-In & Paystack Payment API
+# Paystack Wallet Service API
 
-A backend-only Express + Node.js + TypeScript application that implements Google OAuth 2.0 authentication and Paystack payment integration with secure, well-defined API endpoints.
+A comprehensive backend wallet service built with Express + Node.js + TypeScript, featuring Google OAuth authentication, Paystack payment integration, API key management for service-to-service access, and complete wallet operations.
 
 ## 🎯 Features
 
-- **Google Sign-In (OAuth 2.0)**: Server-side authentication flow
-- **Paystack Payment Integration**: Initialize payments and verify transactions
-- **Webhook Support**: Real-time payment status updates from Paystack
-- **MongoDB Database**: Store users and transactions
-- **TypeScript**: Full type safety and IntelliSense
-- **Security**: Webhook signature verification and environment variable configuration
-- **Idempotency**: Prevent duplicate transaction creation
+### 🔐 Authentication & Authorization
+
+- **Google Sign-In (OAuth 2.0)**: Secure server-side authentication flow
+- **JWT Token Generation**: 7-day expiry tokens for user sessions
+- **Dual Authentication Support**: JWT tokens OR API keys for flexibility
+- **API Key Management**: Service-to-service authentication with granular permissions
+- **Permission-Based Access Control**: Separate permissions for deposit, transfer, and read operations
+
+### 💰 Wallet System
+
+- **Automatic Wallet Creation**: Each user gets a unique 13-digit wallet number on signup
+- **Wallet Balance Management**: Real-time balance tracking in kobo (NGN smallest unit)
+- **Wallet-to-Wallet Transfers**: Send money between users instantly
+- **Transaction History**: Complete audit trail of all deposits and transfers
+- **Balance Inquiry**: Check wallet balance anytime
+
+### 💳 Payment Processing
+
+- **Paystack Integration**: Seamless deposit initialization with payment links
+- **Webhook Handler**: Real-time payment status updates from Paystack (mandatory)
+- **Transaction Verification**: Manual transaction status checks as fallback
+- **Idempotency**: Prevent duplicate transactions with unique references
+- **Webhook Signature Verification**: Secure payload validation
+
+### 🔑 API Key System
+
+- **Key Generation**: Create API keys with custom permissions and expiry
+- **Maximum 5 Active Keys**: Enforced limit per user for security
+- **Flexible Expiry Options**: 1H, 1D, 1M, or 1Y expiration periods
+- **Key Rollover**: Regenerate expired keys with same permissions
+- **Permission Types**:
+  - `deposit` - Initialize Paystack deposits
+  - `transfer` - Transfer funds between wallets
+  - `read` - View balance and transaction history
+- **Automatic Expiry Checking**: Keys are validated on every request
+- **Key Revocation**: Manual revocation support
+
+### 📊 Database & Models
+
+- **MongoDB Integration**: Scalable NoSQL database
+- **User Management**: Store Google profile info and link to wallets
+- **Wallet Model**: Unique wallet numbers with balance tracking
+- **Transaction Records**: Complete transaction history with timestamps
+- **API Key Storage**: Hashed keys with expiry and permissions
+
+### 🛡️ Security Features
+
+- **JWT Secret Protection**: Secure token signing
+- **API Key Hashing**: SHA256 hashing (never store plain keys)
+- **Webhook Signature Verification**: HMAC-SHA512 validation
+- **Environment Variable Configuration**: Sensitive data protection
+- **Permission Validation**: Every API key request checked for proper permissions
+- **Expired Key Rejection**: Automatic validation on every request
+
+### 📚 API Documentation
+
+- **Interactive Swagger UI**: Full API documentation at `/api-docs`
+- **OpenAPI 3.0 Specification**: Industry-standard API documentation
+- **Try It Out Feature**: Test endpoints directly from the browser
+- **Authentication Examples**: JWT and API key usage demonstrations
+- **Request/Response Schemas**: Detailed payload examples
+
+### 🔧 Developer Experience
+
+- **TypeScript**: Full type safety and IntelliSense support
+- **Hot Reload**: Development mode with ts-node-dev
+- **Error Handling**: Comprehensive error messages and status codes
+- **Request Logging**: Track all API requests with timestamps
+- **Health Check Endpoint**: Monitor service status
+- **Production Ready**: Build and deployment scripts included
 
 ## 📋 Prerequisites
 
@@ -101,307 +164,608 @@ The server will start on `http://localhost:3000`
 
 ## 📚 API Documentation
 
+### Interactive Documentation
+
+Visit **`http://localhost:3000/api-docs`** for the complete interactive Swagger API documentation.
+
+The Swagger UI provides:
+
+- ✅ Complete endpoint documentation
+- ✅ Request/response schemas
+- ✅ Try-it-out functionality
+- ✅ Authentication examples
+- ✅ Error response details
+
 ### Base URL
 
 ```
 http://localhost:3000
 ```
 
-### Authentication Endpoints
+### Quick Overview of Endpoints
 
-#### 1. Trigger Google Sign-In
+#### 🔐 Authentication
 
-**Endpoint**: `GET /auth/google`
+- `GET /auth/google` - Initiate Google OAuth sign-in
+- `GET /auth/google/callback` - OAuth callback handler
 
-**Description**: Initiates Google OAuth 2.0 flow
+#### 🔑 API Key Management (Requires JWT)
 
-**Query Parameters**:
+- `POST /keys/create` - Generate new API key
+- `POST /keys/rollover` - Rollover expired API key
 
-- `json` (optional): Set to `true` to receive JSON response instead of redirect
+#### 💰 Wallet Operations
 
-**Response** (with `?json=true`):
+- `POST /wallet/deposit` - Initialize Paystack deposit (requires JWT or API key with `deposit` permission)
+- `POST /wallet/paystack/webhook` - Paystack webhook handler (public)
+- `GET /wallet/deposit/:reference/status` - Check transaction status (requires JWT or API key with `read` permission)
+- `GET /wallet/balance` - Get wallet balance (requires JWT or API key with `read` permission)
+- `POST /wallet/transfer` - Transfer funds to another wallet (requires JWT or API key with `transfer` permission)
+- `GET /wallet/transactions` - Get transaction history (requires JWT or API key with `read` permission)
+
+---
+
+## 🔐 Authentication Methods
+
+### Method 1: JWT Token (User Authentication)
+
+1. **Sign in with Google** to get a JWT token:
+
+```bash
+# Step 1: Get Google auth URL
+curl http://localhost:3000/auth/google?json=true
+
+# Step 2: Visit the URL in browser and complete OAuth
+# Step 3: You'll receive a response with a JWT token
+```
+
+2. **Use the JWT token** in subsequent requests:
+
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+     http://localhost:3000/wallet/balance
+```
+
+### Method 2: API Key (Service-to-Service)
+
+1. **Create an API key** (requires JWT first):
+
+```bash
+curl -X POST http://localhost:3000/keys/create \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "payment-service",
+    "permissions": ["deposit", "read"],
+    "expiry": "1M"
+  }'
+```
+
+Response:
 
 ```json
 {
-  "google_auth_url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=..."
+  "api_key": "sk_live_abc123def456...",
+  "expires_at": "2025-02-10T12:00:00Z"
 }
 ```
 
-**Response** (without query parameter):
-
-- `302 Redirect` to Google OAuth consent page
-
-**Error Responses**:
-
-- `400`: Invalid redirect configuration
-- `500`: Internal server error
-
-**Example**:
+2. **Use the API key** in subsequent requests:
 
 ```bash
-curl http://localhost:3000/auth/google?json=true
+curl -H "x-api-key: sk_live_abc123def456..." \
+     http://localhost:3000/wallet/balance
 ```
 
 ---
 
-#### 2. Google OAuth Callback
+## 💡 Usage Examples
 
-**Endpoint**: `GET /auth/google/callback`
+### Complete User Flow
 
-**Description**: Handles Google OAuth callback, exchanges code for user info, and creates/updates user
+#### 1. User Sign Up & Get Wallet
 
-**Query Parameters**:
+```bash
+# Visit Google OAuth URL
+curl http://localhost:3000/auth/google?json=true
 
-- `code` (required): Authorization code from Google
-- `error` (optional): Error if user denied access
-
-**Success Response** (200):
-
-```json
+# Complete OAuth in browser, receive:
 {
   "user_id": "507f1f77bcf86cd799439011",
   "email": "user@example.com",
   "name": "John Doe",
-  "picture": "https://lh3.googleusercontent.com/..."
+  "wallet": "4566678954356",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
 
-**Error Responses**:
+#### 2. Deposit Money via Paystack
 
-- `400`: Missing or invalid authorization code
-- `401`: Invalid or expired authorization code
-- `500`: Provider error or database error
+```bash
+# Initialize deposit
+curl -X POST http://localhost:3000/wallet/deposit \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 5000}'
 
-**Flow**:
-
-1. Google redirects to this endpoint with authorization code
-2. Server exchanges code for access token
-3. Server fetches user info from Google
-4. Server creates or updates user in database
-5. Returns user information
-
----
-
-### Payment Endpoints
-
-#### 3. Initiate Paystack Payment
-
-**Endpoint**: `POST /payments/paystack/initiate`
-
-**Description**: Initialize a new payment transaction with Paystack
-
-**Request Body**:
-
-```json
-{
-  "amount": 5000,
-  "email": "customer@example.com",
-  "user_id": "507f1f77bcf86cd799439011"
-}
-```
-
-**Fields**:
-
-- `amount` (required): Amount in kobo (smallest currency unit). Example: 5000 = ₦50.00
-- `email` (optional): Customer email address
-- `user_id` (optional): User ID to associate with transaction
-
-**Success Response** (201):
-
-```json
+# Response:
 {
   "reference": "PS_1701875234567_ABC123",
   "authorization_url": "https://checkout.paystack.com/xyz123"
 }
+
+# User completes payment on Paystack
+# Webhook automatically updates wallet balance
 ```
 
-**Error Responses**:
-
-- `400`: Invalid input (amount must be positive number)
-- `402`: Payment initiation failed by Paystack
-- `500`: Database or internal error
-
-**Idempotency**:
-If a transaction with the same reference exists, returns existing transaction instead of creating a new one.
-
-**Example**:
+#### 3. Check Wallet Balance
 
 ```bash
-curl -X POST http://localhost:3000/payments/paystack/initiate \
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+     http://localhost:3000/wallet/balance
+
+# Response:
+{
+  "balance": 5000
+}
+```
+
+#### 4. Transfer to Another Wallet
+
+```bash
+curl -X POST http://localhost:3000/wallet/transfer \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"amount": 5000, "email": "test@example.com"}'
-```
+  -d '{
+    "wallet_number": "7890123456789",
+    "amount": 2000
+  }'
 
----
-
-#### 4. Paystack Webhook
-
-**Endpoint**: `POST /payments/paystack/webhook`
-
-**Description**: Receives real-time updates from Paystack when payment status changes
-
-**Headers**:
-
-- `x-paystack-signature` (required): HMAC SHA512 signature for verification
-
-**Request Body** (example):
-
-```json
+# Response:
 {
-  "event": "charge.success",
-  "data": {
-    "reference": "PS_1701875234567_ABC123",
-    "status": "success",
-    "amount": 5000,
-    "paid_at": "2025-12-06T10:30:00.000Z"
-  }
-}
-```
-
-**Success Response** (200):
-
-```json
-{
-  "status": true
-}
-```
-
-**Error Responses**:
-
-- `400`: Missing signature or invalid signature
-- `500`: Internal error
-
-**Security**:
-
-- Verifies webhook signature using HMAC SHA512
-- Only processes events with valid signatures
-- Updates transaction status in database
-
-**Setup**:
-Configure webhook URL in Paystack dashboard: `https://your-domain.com/payments/paystack/webhook`
-
----
-
-#### 5. Check Transaction Status
-
-**Endpoint**: `GET /payments/:reference/status`
-
-**Description**: Retrieve the current status of a transaction
-
-**Path Parameters**:
-
-- `reference` (required): Transaction reference
-
-**Query Parameters**:
-
-- `refresh` (optional): Set to `true` to fetch live status from Paystack
-
-**Success Response** (200):
-
-```json
-{
-  "reference": "PS_1701875234567_ABC123",
   "status": "success",
-  "amount": 5000,
-  "paid_at": "2025-12-06T10:30:00.000Z"
+  "message": "Transfer completed"
 }
 ```
 
-**Status Values**:
-
-- `pending`: Payment not yet completed
-- `success`: Payment successful
-- `failed`: Payment failed
-
-**Error Responses**:
-
-- `400`: Invalid request (missing reference)
-- `404`: Transaction not found
-- `500`: Internal error
-
-**Behavior**:
-
-- Returns cached status from database by default
-- If `refresh=true` or status is `pending`, fetches live status from Paystack
-- Updates database with latest status
-
-**Examples**:
+#### 5. View Transaction History
 
 ```bash
-# Get cached status
-curl http://localhost:3000/payments/PS_1701875234567_ABC123/status
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+     http://localhost:3000/wallet/transactions
 
-# Get live status from Paystack
-curl http://localhost:3000/payments/PS_1701875234567_ABC123/status?refresh=true
-```
-
----
-
-## 🗄️ Database Schema
-
-### User Collection
-
-```typescript
+# Response:
 {
-  googleId: string;      // Unique Google user ID
-  email: string;         // User email (unique)
-  name: string;          // User full name
-  picture?: string;      // Profile picture URL
-  createdAt: Date;       // Auto-generated
-  updatedAt: Date;       // Auto-generated
-}
-```
-
-### Transaction Collection
-
-```typescript
-{
-  reference: string;                // Unique transaction reference
-  amount: number;                   // Amount in kobo
-  status: 'pending' | 'success' | 'failed';
-  paystackAuthorizationUrl?: string; // Checkout URL
-  userId?: string;                  // Associated user ID
-  paidAt?: Date;                    // Payment completion timestamp
-  createdAt: Date;                  // Auto-generated
-  updatedAt: Date;                  // Auto-generated
+  "transactions": [
+    {
+      "reference": "PS_1701875234567_ABC123",
+      "amount": 5000,
+      "type": "deposit",
+      "status": "success",
+      "createdAt": "2025-12-10T10:30:00.000Z"
+    },
+    {
+      "reference": "PS_1701875234568_DEF456",
+      "amount": 2000,
+      "type": "transfer",
+      "status": "success",
+      "senderId": "507f1f77bcf86cd799439011",
+      "receiverId": "507f1f77bcf86cd799439012",
+      "createdAt": "2025-12-10T11:00:00.000Z"
+    }
+  ]
 }
 ```
 
 ---
 
-## 🔒 Security Considerations
+### Service-to-Service API Key Flow
 
-1. **Environment Variables**: Never commit `.env` file to version control
-2. **Secret Keys**: Keep Google and Paystack secrets secure
-3. **Webhook Verification**: All webhook requests are verified using HMAC SHA512
-4. **HTTPS in Production**: Always use HTTPS for production deployments
-5. **CORS Configuration**: Configure CORS based on your frontend domain
-6. **Rate Limiting**: Consider adding rate limiting for production
+#### 1. Create API Key with Specific Permissions
+
+```bash
+curl -X POST http://localhost:3000/keys/create \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "reporting-service",
+    "permissions": ["read"],
+    "expiry": "1Y"
+  }'
+
+# Response:
+{
+  "api_key": "sk_live_a1b2c3d4e5f6...",
+  "expires_at": "2026-12-10T12:00:00Z"
+}
+```
+
+#### 2. Use API Key to Access Wallet
+
+```bash
+# Check balance using API key
+curl -H "x-api-key: sk_live_a1b2c3d4e5f6..." \
+     http://localhost:3000/wallet/balance
+
+# Get transactions using API key
+curl -H "x-api-key: sk_live_a1b2c3d4e5f6..." \
+     http://localhost:3000/wallet/transactions
+```
+
+#### 3. Rollover Expired Key
+
+```bash
+curl -X POST http://localhost:3000/keys/rollover \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "expired_key_id": "sk_live_old_expired_key...",
+    "expiry": "1Y"
+  }'
+
+# Response: New key with same permissions
+{
+  "api_key": "sk_live_new_key_xyz789...",
+  "expires_at": "2026-12-10T12:00:00Z"
+}
+```
 
 ---
 
-## 🔄 Complete Flow Examples
+## 🔧 API Key Permissions
 
-### Google Sign-In Flow
+### Permission Types
 
-1. **User initiates sign-in**:
+| Permission | Description                    | Allowed Endpoints                                                                              |
+| ---------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `deposit`  | Initialize Paystack deposits   | `POST /wallet/deposit`                                                                         |
+| `transfer` | Transfer funds between wallets | `POST /wallet/transfer`                                                                        |
+| `read`     | View balance and transactions  | `GET /wallet/balance`<br>`GET /wallet/transactions`<br>`GET /wallet/deposit/:reference/status` |
+
+### Permission Rules
+
+- **JWT tokens** have full access to all endpoints
+- **API keys** only have access based on granted permissions
+- Multiple permissions can be combined: `["deposit", "transfer", "read"]`
+- Maximum **5 active API keys** per user
+- Keys automatically expire based on configured time
+
+### Expiry Options
+
+- `1H` - 1 Hour
+- `1D` - 1 Day
+- `1M` - 1 Month (30 days)
+- `1Y` - 1 Year (365 days)
+
+---
+
+## 🔄 Paystack Webhook Integration
+
+### Webhook Setup
+
+1. **Configure webhook URL** in Paystack Dashboard:
 
    ```
-   GET /auth/google
-   → Redirects to Google consent page
+   https://your-domain.com/wallet/paystack/webhook
    ```
 
-2. **User authorizes on Google**:
+2. **Copy webhook secret** from Paystack Dashboard
 
-   ```
-   Google redirects to: /auth/google/callback?code=xyz123
+3. **Add to `.env` file**:
+   ```env
+   PAYSTACK_WEBHOOK_SECRET=your_webhook_secret_here
    ```
 
-3. **Server processes callback**:
-   - Exchanges code for access token
-   - Fetches user info from Google
-   - Creates/updates user in database
-   - Returns user information
+### How It Works
+
+1. User completes payment on Paystack
+2. Paystack sends webhook event to your server
+3. Server verifies webhook signature (HMAC-SHA512)
+4. Server updates transaction status
+5. Server credits wallet balance (only on `charge.success` event)
+
+### Supported Events
+
+- `charge.success` - Payment successful (wallet credited)
+
+### Security
+
+- HMAC-SHA512 signature verification on every webhook
+- Payload validation before processing
+- Idempotent transaction updates (no double-crediting)
+
+---
+
+## 🗄️ Database Models
+
+### User Model
+
+```typescript
+{
+  _id: ObjectId,
+  googleId: string,        // Unique Google user ID
+  email: string,           // User email (unique, indexed)
+  name: string,            // User full name
+  picture?: string,        // Profile picture URL
+  createdAt: Date,         // Auto-generated
+  updatedAt: Date          // Auto-generated
+}
+```
+
+### Wallet Model
+
+```typescript
+{
+  _id: ObjectId,
+  walletNumber: string,    // 13-digit unique wallet number (indexed)
+  balance: number,         // Balance in kobo (min: 0)
+  userId: ObjectId,        // Reference to User (unique, indexed)
+  createdAt: Date,         // Auto-generated
+  updatedAt: Date          // Auto-generated
+}
+```
+
+### Transaction Model
+
+```typescript
+{
+  _id: ObjectId,
+  reference: string,                          // Unique transaction reference (indexed)
+  amount: number,                             // Amount in kobo
+  type: 'deposit' | 'transfer',              // Transaction type
+  status: 'pending' | 'success' | 'failed',  // Transaction status
+  paystackAuthorizationUrl?: string,         // Paystack checkout URL
+  userId?: ObjectId,                         // User ID (for deposits)
+  senderId?: ObjectId,                       // Sender ID (for transfers)
+  receiverId?: ObjectId,                     // Receiver ID (for transfers)
+  paidAt?: Date,                             // Payment completion timestamp
+  createdAt: Date,                           // Auto-generated
+  updatedAt: Date                            // Auto-generated
+}
+```
+
+### API Key Model
+
+```typescript
+{
+  _id: ObjectId,
+  userId: ObjectId,                          // Reference to User (indexed)
+  keyHash: string,                           // SHA256 hash of API key (unique, indexed)
+  name: string,                              // Friendly name
+  permissions: ['deposit'|'transfer'|'read'], // Array of permissions
+  expiresAt: Date,                           // Expiration timestamp (indexed)
+  isRevoked: boolean,                        // Manual revocation flag
+  createdAt: Date,                           // Auto-generated
+  updatedAt: Date                            // Auto-generated
+}
+```
+
+---
+
+## 🔒 Security Best Practices
+
+### Implemented Security Features
+
+✅ **Environment Variables** - Sensitive data in `.env` file
+✅ **JWT Secret Protection** - Secure token signing and verification
+✅ **API Key Hashing** - SHA256 hashing (plain keys never stored)
+✅ **Webhook Signature Verification** - HMAC-SHA512 validation
+✅ **Permission-Based Access** - Granular control over API key permissions
+✅ **Automatic Key Expiry** - Time-based key invalidation
+✅ **Rate Limiting Support** - Request logging for monitoring
+✅ **Input Validation** - Type checking and required field validation
+✅ **Error Handling** - Comprehensive error messages without leaking sensitive info
+
+### Production Recommendations
+
+1. **Use HTTPS** - Always use HTTPS in production
+2. **Set Strong JWT Secret** - Use a long, random secret key
+3. **Configure CORS** - Restrict to your frontend domain only
+4. **Enable Rate Limiting** - Protect against abuse
+5. **Monitor Logs** - Track failed authentication attempts
+6. **Database Security** - Use MongoDB authentication and connection string encryption
+7. **Regular Key Rotation** - Encourage users to rotate API keys periodically
+8. **Webhook IP Whitelisting** - Restrict webhook endpoint to Paystack IPs
+
+---
+
+## 🚀 Deployment
+
+### Environment Configuration
+
+Update `.env` for production:
+
+```env
+NODE_ENV=production
+PORT=3000
+MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/walletdb
+GOOGLE_CLIENT_ID=production_client_id
+GOOGLE_CLIENT_SECRET=production_client_secret
+GOOGLE_REDIRECT_URI=https://yourdomain.com/auth/google/callback
+PAYSTACK_SECRET_KEY=sk_live_your_production_key
+PAYSTACK_WEBHOOK_SECRET=your_production_webhook_secret
+APP_BASE_URL=https://yourdomain.com
+JWT_SECRET=your-super-strong-production-secret-key
+```
+
+### Build and Run
+
+```bash
+# Build TypeScript
+npm run build
+
+# Start production server
+npm start
+```
+
+### Docker Deployment (Optional)
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+---
+
+## 📊 Project Structure
+
+```
+paystack-wallet-service/
+├── src/
+│   ├── config/
+│   │   ├── index.ts              # Environment configuration
+│   │   ├── database.ts           # MongoDB connection
+│   │   └── swagger.ts            # Swagger/OpenAPI configuration
+│   ├── middleware/
+│   │   ├── auth.middleware.ts    # JWT & API key authentication
+│   │   └── errorHandler.ts      # Global error handling
+│   ├── models/
+│   │   ├── User.ts               # User schema
+│   │   ├── Wallet.ts             # Wallet schema
+│   │   ├── Transaction.ts        # Transaction schema
+│   │   └── Key.ts                # API Key schema
+│   ├── routes/
+│   │   ├── auth.routes.ts        # Google OAuth endpoints
+│   │   ├── wallet.routes.ts      # Wallet operations endpoints
+│   │   └── key.routes.ts         # API key management endpoints
+│   ├── services/
+│   │   ├── googleAuth.service.ts # Google OAuth logic
+│   │   ├── wallet.service.ts     # Paystack integration
+│   │   └── key.service.ts        # API key generation logic
+│   └── index.ts                  # Application entry point
+├── .env                          # Environment variables (not in git)
+├── .env.example                  # Environment template
+├── package.json                  # Dependencies
+├── tsconfig.json                 # TypeScript configuration
+├── README.md                     # This file
+└── SWAGGER_SETUP.md              # Swagger documentation guide
+```
+
+---
+
+## 🧪 Testing
+
+### Manual Testing with cURL
+
+See the [Usage Examples](#-usage-examples) section above for complete cURL examples.
+
+### Testing with Swagger UI
+
+1. Start the server: `npm run dev`
+2. Visit: `http://localhost:3000/api-docs`
+3. Click "Authorize" and add your JWT token or API key
+4. Try out endpoints directly from the browser
+
+### Postman Collection
+
+Import the Swagger spec into Postman:
+
+1. Open Postman
+2. Import > Link
+3. Enter: `http://localhost:3000/api-docs/swagger.json`
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**MongoDB Connection Failed**
+
+```
+Error: MongoDB connection error
+```
+
+**Solution**: Verify `MONGODB_URI` in `.env` and ensure MongoDB is running
+
+**Google OAuth Error**
+
+```
+Error: invalid_client
+```
+
+**Solution**: Check `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and redirect URI matches Google Console
+
+**Paystack Initialization Failed**
+
+```
+Error: Paystack initialization failed
+```
+
+**Solution**: Verify `PAYSTACK_SECRET_KEY` is correct and starts with `sk_test_` or `sk_live_`
+
+**Webhook Signature Invalid**
+
+```
+Error: Invalid webhook signature
+```
+
+**Solution**: Ensure `PAYSTACK_WEBHOOK_SECRET` matches the secret in your Paystack Dashboard
+
+**API Key Expired**
+
+```
+Error: Invalid or expired API key
+```
+
+**Solution**: Use the `/keys/rollover` endpoint to generate a new key
+
+---
+
+## 📝 License
+
+MIT
+
+---
+
+## 👨‍💻 Author
+
+Built with ❤️ for HNG Backend Track Stage 8
+
+---
+
+## 🔗 Useful Links
+
+- [Google OAuth Documentation](https://developers.google.com/identity/protocols/oauth2)
+- [Paystack API Documentation](https://paystack.com/docs/api/)
+- [Swagger/OpenAPI Specification](https://swagger.io/specification/)
+- [MongoDB Documentation](https://docs.mongodb.com/)
+- [Express.js Documentation](https://expressjs.com/)
+
+---
+
+## ✨ Features Checklist
+
+- ✅ Google OAuth 2.0 Authentication
+- ✅ JWT Token Generation (7-day expiry)
+- ✅ Automatic Wallet Creation on Signup
+- ✅ Paystack Deposit Integration
+- ✅ Paystack Webhook Handler (Mandatory)
+- ✅ Wallet Balance Management
+- ✅ Wallet-to-Wallet Transfers
+- ✅ Transaction History
+- ✅ API Key Generation with Permissions
+- ✅ API Key Expiry System (1H, 1D, 1M, 1Y)
+- ✅ API Key Rollover
+- ✅ Maximum 5 Active Keys Per User
+- ✅ Permission-Based Access Control
+- ✅ Interactive Swagger API Documentation
+- ✅ Request Logging
+- ✅ Comprehensive Error Handling
+- ✅ TypeScript Support
+- ✅ MongoDB Integration
+
+---
+
+**Happy Coding! 🚀**
+
+- Returns user information
 
 ### Paystack Payment Flow
 

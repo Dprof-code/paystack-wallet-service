@@ -2,17 +2,80 @@ import { Router, Request, Response } from "express";
 import paystackService from "../services/wallet.service";
 import { Transaction } from "../models/Transaction";
 import { Wallet } from "../models/Wallet";
-import { authenticate, AuthRequest } from "../middleware/auth.middleware";
+import {
+  authenticate,
+  AuthRequest,
+  requirePermission,
+} from "../middleware/auth.middleware";
 
 const router = Router();
 
 /**
- * POST /wallet/deposit
- * Initiate a deposit with Paystack
+ * @swagger
+ * /wallet/deposit:
+ *   post:
+ *     summary: Initiate a Paystack deposit
+ *     description: Initialize a deposit transaction with Paystack and get payment link
+ *     tags: [Wallet]
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Amount to deposit in kobo (1 NGN = 100 kobo)
+ *                 example: 5000
+ *     responses:
+ *       201:
+ *         description: Deposit initiated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 reference:
+ *                   type: string
+ *                   example: PS_1234567890_abc
+ *                 authorization_url:
+ *                   type: string
+ *                   example: https://checkout.paystack.com/xyz
+ *       400:
+ *         description: Invalid amount
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Insufficient permissions (API key without deposit permission)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   "/deposit",
   authenticate,
+  requirePermission("deposit"),
   async (req: AuthRequest, res: Response) => {
     try {
       const { amount } = req.body;
@@ -95,8 +158,42 @@ router.post(
 );
 
 /**
- * POST /wallet/paystack/webhook
- * Handle Paystack webhook events
+ * @swagger
+ * /wallet/paystack/webhook:
+ *   post:
+ *     summary: Paystack webhook handler
+ *     description: Receives and processes Paystack webhook events (charge.success) to update wallet balance
+ *     tags: [Wallet]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             description: Paystack webhook payload
+ *     responses:
+ *       200:
+ *         description: Webhook processed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: boolean
+ *                   example: true
+ *       400:
+ *         description: Invalid signature or request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post("/paystack/webhook", async (req: Request, res: Response) => {
   try {
@@ -174,12 +271,73 @@ router.post("/paystack/webhook", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /wallet/deposit/:reference/status
- * Check transaction status
+ * @swagger
+ * /wallet/deposit/{reference}/status:
+ *   get:
+ *     summary: Check deposit transaction status
+ *     description: Get the current status of a deposit transaction (does not credit wallet, only webhook does)
+ *     tags: [Wallet]
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: reference
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Transaction reference
+ *         example: PS_1234567890_abc
+ *       - in: query
+ *         name: refresh
+ *         schema:
+ *           type: string
+ *           enum: [true, false]
+ *         description: Force refresh from Paystack
+ *     responses:
+ *       200:
+ *         description: Transaction status retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 reference:
+ *                   type: string
+ *                 status:
+ *                   type: string
+ *                   enum: [pending, success, failed]
+ *                 amount:
+ *                   type: number
+ *       400:
+ *         description: Invalid request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - not your transaction
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Transaction not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   "/deposit/:reference/status",
   authenticate,
+  requirePermission("read"),
   async (req: AuthRequest, res: Response) => {
     try {
       const { reference } = req.params;
@@ -248,12 +406,50 @@ router.get(
 );
 
 /**
- * GET /wallet/balance
- * Get user wallet balance
+ * @swagger
+ * /wallet/balance:
+ *   get:
+ *     summary: Get wallet balance
+ *     description: Retrieve the current balance of the authenticated user's wallet
+ *     tags: [Wallet]
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Wallet balance retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 balance:
+ *                   type: number
+ *                   description: Balance in kobo
+ *                   example: 15000
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Insufficient permissions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   "/balance",
   authenticate,
+  requirePermission("read"),
   async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
@@ -264,6 +460,11 @@ router.get(
           balance: hasWallet.balance,
         });
       }
+
+      return res.status(404).json({
+        error: "wallet_not_found",
+        message: "Wallet not found for this user",
+      });
     } catch (error) {
       console.error("Unexpected error in getting user balance:", error);
       return res.status(500).json({
@@ -275,12 +476,70 @@ router.get(
 );
 
 /**
- * POST /wallet/transfer
- * Wallet transfer
+ * @swagger
+ * /wallet/transfer:
+ *   post:
+ *     summary: Transfer funds to another wallet
+ *     description: Transfer money from your wallet to another user's wallet
+ *     tags: [Wallet]
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - wallet_number
+ *               - amount
+ *             properties:
+ *               wallet_number:
+ *                 type: string
+ *                 description: Recipient's wallet number (13 digits)
+ *                 example: "4566678954356"
+ *               amount:
+ *                 type: number
+ *                 description: Amount to transfer in kobo
+ *                 example: 3000
+ *     responses:
+ *       200:
+ *         description: Transfer status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: [success, failed]
+ *                 message:
+ *                   type: string
+ *                   example: Transfer completed
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Insufficient permissions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   "/transfer",
   authenticate,
+  requirePermission("transfer"),
   async (req: AuthRequest, res: Response) => {
     try {
       const { amount, wallet_number } = req.body;
@@ -338,6 +597,11 @@ router.post(
           });
         }
       }
+
+      return res.status(404).json({
+        error: "wallet_not_found",
+        message: "Wallet not found for this user",
+      });
     } catch (error) {
       console.error("Unexpected error in making transfer:", error);
       return res.status(500).json({
@@ -349,11 +613,50 @@ router.post(
 );
 
 /**
- * GET /wallet/transactions
+ * @swagger
+ * /wallet/transactions:
+ *   get:
+ *     summary: Get transaction history
+ *     description: Retrieve all transactions for the authenticated user (deposits and transfers)
+ *     tags: [Wallet]
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Transaction history retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 transactions:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Transaction'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Insufficient permissions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   "/transactions",
   authenticate,
+  requirePermission("read"),
   async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
