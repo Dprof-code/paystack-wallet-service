@@ -288,7 +288,15 @@ router.post(
       const userId = req.user!.id;
 
       const hasWallet = await Wallet.findOne({ userId: userId });
+
       if (hasWallet) {
+        if (hasWallet.userId == userId) {
+          return res.status(200).json({
+            status: "failed",
+            message: "You cannot transfer to yourself",
+          });
+        }
+
         if (hasWallet.balance >= amount) {
           const recipientWallet = await Wallet.findOne({
             walletNumber: wallet_number,
