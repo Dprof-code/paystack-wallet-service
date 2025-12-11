@@ -12,15 +12,8 @@ const router = Router();
  * /auth/google:
  *   get:
  *     summary: Initiate Google OAuth sign-in
- *     description: Redirects user to Google sign-in page or returns authorization URL as JSON
+ *     description: Returns Google authorization URL as JSON
  *     tags: [Authentication]
- *     parameters:
- *       - in: query
- *         name: json
- *         schema:
- *           type: string
- *           enum: [true, false]
- *         description: Set to 'true' to return JSON instead of redirect
  *     responses:
  *       200:
  *         description: Google authorization URL
@@ -46,8 +39,7 @@ router.get("/google", (req: Request, res: Response) => {
     const googleAuthUrl = googleAuthService.getAuthorizationUrl();
 
     const acceptHeader = req.headers.accept || "";
-    const prefersJson =
-      acceptHeader.includes("application/json") || req.query.json === "true";
+    const prefersJson = acceptHeader.includes("application/json");
 
     if (prefersJson || !acceptHeader.includes("text/html")) {
       return res.status(200).json({
@@ -171,7 +163,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
           picture: userInfo.picture,
         });
       } else {
-        // Update existing user info (optional - only if you want to sync changes)
+        // Update existing user info
         user.name = userInfo.name;
         user.picture = userInfo.picture;
         await user.save();
