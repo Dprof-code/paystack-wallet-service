@@ -44,6 +44,7 @@ app.get("/", (_req: Request, res: Response) => {
       keys: {
         create: "POST /keys/create",
         rollover: "POST /keys/rollover",
+        revoke: "POST /keys/revoke",
       },
     },
   });

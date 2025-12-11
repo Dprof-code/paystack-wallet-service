@@ -60,6 +60,25 @@ const keyService = {
       expiry
     );
   },
+
+  async revokeKey(userId: string, apiKey: string) {
+    const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
+
+    const existingKey = await Key.findOne({
+      userId: userId,
+      keyHash: keyHash,
+      isRevoked: false,
+    });
+
+    if (!existingKey) {
+      throw new Error("API key not found or already revoked");
+    }
+
+    existingKey.isRevoked = true;
+    await existingKey.save();
+
+    return existingKey;
+  },
 };
 
 function calculateExpiry(expiry: string): Date {

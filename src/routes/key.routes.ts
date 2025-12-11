@@ -204,4 +204,103 @@ router.post(
   }
 );
 
+/**
+ * @swagger
+ * /keys/revoke:
+ *   post:
+ *     summary: Revoke an active API key
+ *     description: Manually revoke an API key to immediately invalidate it
+ *     tags: [API Keys]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - api_key
+ *             properties:
+ *               api_key:
+ *                 type: string
+ *                 description: The API key to revoke
+ *                 example: sk_live_abc123def456...
+ *     responses:
+ *       200:
+ *         description: API key revoked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: API key revoked successfully
+ *                 revoked_key_name:
+ *                   type: string
+ *                   example: payment-processor
+ *       400:
+ *         description: Bad request - missing API key
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized - invalid or missing JWT token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: API key not found or already revoked
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post(
+  "/revoke",
+  authenticate,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { api_key } = req.body;
+      const userId = req.user?.id;
+
+      if (!api_key) {
+        return res.status(400).json({
+          error: "bad_request",
+          message: "Missing required field: api_key",
+        });
+      }
+
+      const revokedKey = await keyService.revokeKey(userId!, api_key);
+      return res.status(200).json({
+        message: "API key revoked successfully",
+        revoked_key_name: revokedKey.name,
+      });
+    } catch (error: any) {
+      console.error("Error revoking API key:", error);
+
+      if (error.message === "API key not found or already revoked") {
+        return res.status(404).json({
+          error: "not_found",
+          message: error.message,
+        });
+      }
+
+      return res.status(500).json({
+        error: "internal_server_error",
+        message: "Failed to revoke API key",
+      });
+    }
+  }
+);
+
 export default router;
