@@ -25,8 +25,6 @@ const router = Router();
  *                 google_auth_url:
  *                   type: string
  *                   example: https://accounts.google.com/o/oauth2/v2/auth?...
- *       302:
- *         description: Redirect to Google sign-in page
  *       500:
  *         description: Server error
  *         content:

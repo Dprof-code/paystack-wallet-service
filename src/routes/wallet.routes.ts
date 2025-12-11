@@ -198,36 +198,34 @@ router.post(
 router.post("/paystack/webhook", async (req: Request, res: Response) => {
   try {
     const signature = req.headers["x-paystack-signature"] as string;
-    const webhookSecret = process.env.PAYSTACK_WEBHOOK_SECRET;
+    // const webhookSecret = process.env.PAYSTACK_WEBHOOK_SECRET;
 
-    if (
-      !webhookSecret ||
-      webhookSecret === "your_paystack_webhook_secret_here"
-    ) {
-      console.log("⚠️  DEV MODE: Skipping webhook signature verification");
-    } else {
-      // Verify signature in production
-      if (!signature) {
-        return res.status(400).json({
-          error: "invalid_request",
-          message: "Missing Paystack signature",
-        });
-      }
-
-      const payload = JSON.stringify(req.body);
-      const isValid = paystackService.verifyWebhookSignature(
-        payload,
-        signature
-      );
-
-      if (!isValid) {
-        console.warn("Invalid webhook signature");
-        return res.status(400).json({
-          error: "invalid_signature",
-          message: "Invalid webhook signature",
-        });
-      }
+    // Verify signature in production
+    if (!signature) {
+      return res.status(400).json({
+        error: "invalid_request",
+        message: "Missing Paystack signature",
+      });
     }
+
+    const payload = JSON.stringify(req.body);
+    const isValid = paystackService.verifyWebhookSignature(payload, signature);
+
+    if (!isValid) {
+      console.warn("Invalid webhook signature");
+      return res.status(400).json({
+        error: "invalid_signature",
+        message: "Invalid webhook signature",
+      });
+    }
+
+    // if (
+    //   !webhookSecret ||
+    //   webhookSecret === "your_paystack_webhook_secret_here"
+    // ) {
+    //   console.log("⚠️  DEV MODE: Skipping webhook signature verification");
+    // } else {
+    // }
 
     // Process webhook event
     const event = req.body;
@@ -630,12 +628,21 @@ router.post(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 transactions:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Transaction'
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   type:
+ *                     type: string
+ *                     enum: [deposit, transfer]
+ *                     example: deposit
+ *                   amount:
+ *                     type: number
+ *                     example: 5000
+ *                   status:
+ *                     type: string
+ *                     enum: [pending, success, failed]
+ *                     example: success
  *       401:
  *         description: Unauthorized
  *         content:
@@ -668,13 +675,13 @@ router.get(
         $or: [{ userId: userId }, { senderId: userId }, { receiverId: userId }],
       }).sort({ createdAt: -1 });
 
-      return res.status(200).json({
-        transactions: transactions.map((tx) => ({
+      return res.status(200).json(
+        transactions.map((tx) => ({
           type: tx.type,
           amount: tx.amount,
           status: tx.status,
-        })),
-      });
+        }))
+      );
     } catch (error) {
       console.error("Unexpected error in getting transaction history:", error);
       return res.status(500).json({
