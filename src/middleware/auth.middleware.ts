@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import config from "../config";
 import { Key } from "../models/Key";
+import { User } from "../models/User";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -48,8 +49,11 @@ export const authenticate = async (
         return res.status(401).json({ error: "Invalid or expired API key" });
       }
 
+      // Get user email with ID
+      const user = await User.findOne({ userId: key.userId });
+
       // Attach user and key info
-      req.user = { id: key.userId, email: "" };
+      req.user = { id: key.userId, email: user ? user.email : "" };
       req.authType = "api_key";
       req.apiKey = key;
       return next();
