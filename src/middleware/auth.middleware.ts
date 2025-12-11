@@ -50,7 +50,7 @@ export const authenticate = async (
       }
 
       // Get user email with ID
-      const user = await User.findOne({ userId: key.userId });
+      const user = await User.findOne({ _id: key.userId });
 
       // Attach user and key info
       req.user = { id: key.userId, email: user ? user.email : "" };
